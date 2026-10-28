@@ -77,9 +77,49 @@ def create_token(user_id: int):
 
 
 
+#DELETE EVENT
+
+@app.delete("/events/{event_id}")
+def delete_event( 
+    event_id:int,
+    db:Session=Depends(get_db),
+    current_user:models.User=Depends(get_current_user)
+):
+    existing_event=db.query(models.Event).filter(models.Event.id==event_id).first()
+    
+    if existing_event is None:
+        raise HTTPException(
+            status_code=404,
+            detail="event not found"
+        )
+    if existing_event.organizer_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="you are not allowed to delete this event"
+        )
+    if existing_event.is_active==False:
+        raise HTTPException(
+            status_code=400,
+            detail="event is already inactive"
+        )
+    existing_event.is_active=False
 
 
-
+    try:
+        db.commit()
+        db.refresh(existing_event)
+    except Exception:
+        db.rollback() 
+        raise HTTPException(
+            status_code=500,
+            detail="event deletion failed "
+        )
+    return{
+        "message":"Event deleted successfully",
+        "event_id":existing_event.id,
+        "is_active":existing_event.is_active
+    }   
+    
 #update event deatails
 @app.patch("/events{event_id}")
 def update_events_here(event_id:int,event_data:EventUpdate,db:Session=Depends(get_db),current_user:models.User=Depends(get_current_user)):
