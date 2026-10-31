@@ -13,6 +13,10 @@ class User(Base):
     email = Column(String(150), nullable=False, unique=True, index=True)
 
     hashed_password = Column(String(250), nullable=False)
+
+    role=Column(String,default="attendee",nullable=False)
+
+    organizer_status=Column(String,default="not_applicable",nullable=False)
     
     is_active = Column(Boolean, default=True)
 
