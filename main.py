@@ -53,6 +53,26 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
+def checking_user_role(required_role:str):
+    def role_checker(
+            current_user:models.User=Depends(get_current_user)):
+            if current_user.role != required_role:
+        
+             raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to perform this action"
+            )
+            return current_user
+    return role_checker
+
+
+
+
+
+
+
+
+
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(Bearer_scheme), db: Session = Depends(get_db)):
     token = credentials.credentials
     
@@ -86,6 +106,40 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(Bearer_
             detail="user acc is inactive"
         )
     return Current_user
+
+
+
+
+def check_approved_organizer(current_user:models.User=Depends(get_current_user)):
+    if current_user.role!="organizer":
+        raise HTTPException(
+
+            status_code=status.HTTP_403_FORBIDDEN,
+
+            detail="Only organizers can perform this action"
+
+        )
+    
+    if current_user.organizer_status!="approved":
+        raise HTTPException(
+
+            status_code=status.HTTP_403_FORBIDDEN,
+
+            detail="Your organizer account is not approved yet"
+
+        )
+
+    return current_user
+
+
+
+def check_admin_role(current_user:models.User=Depends(get_current_user)):
+    if current_user.role !="admin":
+        raise HTTPException(status_code=403,
+        detail="only admin can perform this action")
+    return current_user
+
+
 
 def create_token(user_id: int):
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -441,7 +495,7 @@ def update_events_here(event_id:int,event_data:EventUpdate,db:Session=Depends(ge
 # CREATE EVENT
 
 @app.post("/events", status_code=status.HTTP_201_CREATED)
-def create_event(event: EventCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+def create_event(event: EventCreate, db: Session = Depends(get_db), current_user: models.User = Depends(check_approved_organizer)):
     if event.event_date.tzinfo is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -565,4 +619,200 @@ def register_user(user: UserCreate, db: Session = Depends(get_db)):
         "name": new_user.name,
         "email": new_user.email,"role":new_user.role,
         "organizer_status":new_user.organizer_status
+    }
+
+
+@app.patch("/admin/organizers/{organizer_id}/approve")
+def approve_organizer(
+    organizer_id:int,
+    db:Session=Depends(get_db),
+    current_user:models.User=Depends(check_admin_role)
+):
+    organizer=(db.query(models.User).filter(models.User.id==organizer_id).first())
+
+    if organizer is None:
+        raise HTTPException(
+            status_code=403,
+            detail="user not found"
+        )
+    if organizer.role != "organizer":
+        raise HTTPException(
+            status_code=403,
+            detail="this user is not organizer "
+        )
+    if organizer.organizer_status == "approve":
+        raise HTTPException(
+            status_code=403,
+            deatil="organizer is alredy approved "
+        )
+    
+    organizer.organizer_status=="approved"
+
+    try:
+        db.commit()
+        db.refresh(organizer)
+    except Exception:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="unable to approve organizer"
+        )
+    return{
+        "message":"organizer approved succesfully",
+        "organizer_id":organizer.id,
+        "organizer_name":organizer.name,
+        "organizer_status":organizer.organizer_status
+    }
+
+@app.patch("admin/organizer/{organizer_id}/reject")
+def reject_organizer(organizer_id:int,db:Session=Depends(get_db),current_user:models.User=Depends(check_admin_role)):
+
+
+    organizer=(db.query(models.User).filter(models.User.id==organizer_id).first())
+
+    if organizer is None:
+        raise HTTPException(
+            status_code=403,
+            detail="user not found"
+        )
+    if organizer.role!="organizer":
+        raise HTTPException(
+            status_code=403,
+            detail="this user is not an organizer")
+   
+    organizer.organizer_staus="rejected"
+
+    try:
+        db.commit()
+        db.refresh(organizer)
+    except Exception:
+        db.rollback()
+        raise HTTPException (
+
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+
+            detail="Unable to reject organizer"
+
+        )
+
+    return {
+
+        "message": "Organizer rejected successfully",
+
+        "organizer_id": organizer.id,
+
+        "organizer_name": organizer.name,
+
+        "organizer_status": organizer.organizer_status
+
+    } 
+
+@app.get("/admin/organizer/pending")
+def get_pending_organizer(db:Session=Depends(get_db),current_user:models.User=Depends(check_admin_role)):
+    pending_organizers=db.query(models.User).filter(models.User.role=="organizer",models.User.organizer_status=="pending").order_by(models.User.id.asc().all()
+    )
+
+    organizers_list=[]
+    for organizer in pending_organizers:
+        organizer_details={
+        
+        
+            "organizer_id":organizer.id,
+            "name":organizer.name,"email":organizer.email,"organizer_status":organizer.organizer_status
+        }
+
+    organizers_list.append(organizer_details)
+
+    return {
+        "total_pending_organizers":len(organizers_list),
+        "organizer":organizers_list
+    }    
+## =========================================================
+# ORGANIZER: GET ALL OWN EVENTS
+# =========================================================
+
+@app.get("/organizer/events")
+def get_organizer_events(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(check_approved_organizer)
+):
+
+    # Get events created by the logged-in organizer
+    organizer_events = (
+        db.query(models.Event)
+        .filter(models.Event.organizer_id == current_user.id)
+        .order_by(models.Event.event_date.asc())
+        .all()
+    )
+    events_list = []
+
+    for event in organizer_events:
+
+        event_details = {
+            "event_id": event.id,
+            "title": event.title,
+            "description": event.description,
+            "location": event.location,
+            "event_date": event.event_date,
+            "price": event.price,
+            "total_seats": event.total_seats,
+            "available_seats": event.available_seats,
+            "is_active": event.is_active
+        }
+
+        events_list.append(event_details)
+
+    return {
+        "organizer_id": current_user.id,
+        "organizer_name": current_user.name,
+        "total_events": len(organizer_events),
+        "events": events_list
+    }
+
+
+
+# admin dashboard
+@app.get("admin/dashboard")
+def get_admin_dashboard(
+    db:Session=Depends(get_db),
+    current_user:models.User=Depends(check_admin_role)
+):
+    total_users=(db.query(models.User).count())
+
+    total_attendees=(db.query(models.User).filter(models.User.role=="attendee").count())
+
+    total_organizers=(db.query(models.User).filter(models.User.role=="organizer").count())
+
+    approved_organizers=(db.query(models.User).filter(models.User.role == "organizer",models.User.organizer_status=="approved").count())
+
+    rejected_organizers=(db.query(models.User).filter(models.User.role == "organizer",models.User.organizer_status=="rejected").count())
+   
+    pending_organizers = (db.query(models.User).filter(models.User.role == "organizer",models.User.organizer_status == "pending").count())
+
+    # events
+    total_events=(db.query(models.Event).count())
+
+    active_events=(db.query(models.Event).filter(models.Event.is_active=="True").count())
+
+    inactive_events=(db.query(models.Event).filter(models.Event.is_active=="False").count())
+
+
+
+    return {
+
+        "message": "Admin dashboard statistics",
+        "total_users": total_users,
+        "total_attendees": total_attendees,
+        "total_organizers": total_organizers,
+        "organizers": {
+            "pending": pending_organizers,
+            "approved": approved_organizers,
+            "rejected": rejected_organizers
+        },
+        "events": {
+            "total": total_events,
+            "active": active_events,
+            "inactive": inactive_events
+        }
     }
