@@ -12,6 +12,8 @@ from schemas import UserLogin, UserCreate, EventCreate ,EventUpdate
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
+
+
 env_file = Path(__file__).resolve().parent / ".env"
 if env_file.is_file():
     for line in env_file.read_text().splitlines():
@@ -46,6 +48,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY is missing")
@@ -53,47 +56,26 @@ JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
-def checking_user_role(required_role:str):
-    def role_checker(
-            current_user:models.User=Depends(get_current_user)):
-            if current_user.role != required_role:
-        
-             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to perform this action"
-            )
-            return current_user
-    return role_checker
-
-
-
-
-
-
 
 
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(Bearer_scheme), db: Session = Depends(get_db)):
     token = credentials.credentials
-    
     try:
         payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
-
         if user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="invalid authorization"
             )
         user_id = int(user_id)
-
     except (jwt.InvalidTokenError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"}
         )
-        
     Current_user = db.query(models.User).filter(models.User.id == user_id).first()
     if Current_user is None:
         raise HTTPException(
@@ -106,6 +88,35 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(Bearer_
             detail="user acc is inactive"
         )
     return Current_user
+
+
+
+def checking_user_role(required_role: str):
+    def role_checker(
+        current_user: models.User = Depends(get_current_user)
+    ):
+        if current_user.role != required_role:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to perform this action"
+            )
+
+        return current_user
+
+    return role_checker
+
+
+
+
+
+
+
+def check_admin_role(current_user:models.User=Depends(get_current_user)):
+    if current_user.role !="admin":
+        raise HTTPException(status_code=403,
+        detail="only admin can perform this action")
+    return current_user
+
 
 
 
@@ -133,14 +144,6 @@ def check_approved_organizer(current_user:models.User=Depends(get_current_user))
 
 
 
-def check_admin_role(current_user:models.User=Depends(get_current_user)):
-    if current_user.role !="admin":
-        raise HTTPException(status_code=403,
-        detail="only admin can perform this action")
-    return current_user
-
-
-
 def create_token(user_id: int):
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
@@ -149,6 +152,9 @@ def create_token(user_id: int):
     }
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
+
+
+
 
 #sort
 # =========================================================
@@ -576,11 +582,11 @@ def get_my_profile(Current_user: models.User = Depends(get_current_user)):
     }
 
 
-@app.post("/Login")
+@app.post("/login")
 def login_user(user: UserLogin, db: Session = Depends(get_db)):
     existing_user = db.query(models.User).filter(models.User.email == user.email).first()
     if (existing_user is None or not password_hash.verify(user.password, existing_user.hashed_password)):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid email or password", headers={"WWW-AUTHENTICATE": "BEARER"})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid email or password", headers={"WWW-Authenticate": "Bearer"})
     
     access_token = create_token(existing_user.id)
     return {
@@ -640,13 +646,13 @@ def approve_organizer(
             status_code=403,
             detail="this user is not organizer "
         )
-    if organizer.organizer_status == "approve":
+    if organizer.organizer_status == "approved":
         raise HTTPException(
             status_code=403,
-            deatil="organizer is alredy approved "
+            deatil="Organizer is already approved "
         )
     
-    organizer.organizer_status=="approved"
+    organizer.organizer_status="approved"
 
     try:
         db.commit()
@@ -665,7 +671,7 @@ def approve_organizer(
         "organizer_status":organizer.organizer_status
     }
 
-@app.patch("admin/organizer/{organizer_id}/reject")
+@app.patch("/admin/organizers/{organizer_id}/reject")
 def reject_organizer(organizer_id:int,db:Session=Depends(get_db),current_user:models.User=Depends(check_admin_role)):
 
 
@@ -681,7 +687,7 @@ def reject_organizer(organizer_id:int,db:Session=Depends(get_db),current_user:mo
             status_code=403,
             detail="this user is not an organizer")
    
-    organizer.organizer_staus="rejected"
+    organizer.organizer_status = "rejected"
 
     try:
         db.commit()
@@ -710,8 +716,8 @@ def reject_organizer(organizer_id:int,db:Session=Depends(get_db),current_user:mo
 
 @app.get("/admin/organizer/pending")
 def get_pending_organizer(db:Session=Depends(get_db),current_user:models.User=Depends(check_admin_role)):
-    pending_organizers=db.query(models.User).filter(models.User.role=="organizer",models.User.organizer_status=="pending").order_by(models.User.id.asc().all()
-    )
+    pending_organizers=(db.query(models.User).filter(models.User.role=="organizer",models.User.organizer_status=="pending").order_by(models.User.id.asc()).all())
+    
 
     organizers_list=[]
     for organizer in pending_organizers:
@@ -722,7 +728,7 @@ def get_pending_organizer(db:Session=Depends(get_db),current_user:models.User=De
             "name":organizer.name,"email":organizer.email,"organizer_status":organizer.organizer_status
         }
 
-    organizers_list.append(organizer_details)
+        organizers_list.append(organizer_details)
 
     return {
         "total_pending_organizers":len(organizers_list),
@@ -772,35 +778,161 @@ def get_organizer_events(
 
 
 
-# admin dashboard
-@app.get("admin/dashboard")
-def get_admin_dashboard(
-    db:Session=Depends(get_db),
-    current_user:models.User=Depends(check_admin_role)
-):
-    total_users=(db.query(models.User).count())
 
-    total_attendees=(db.query(models.User).filter(models.User.role=="attendee").count())
+@app.post("/admin/create")
+def creating_admin(db:Session=Depends(get_db)):
+    admin_email=os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
+    admin_name = os.getenv("ADMIN_NAME", "EVENTHub Admin")
 
-    total_organizers=(db.query(models.User).filter(models.User.role=="organizer").count())
+    if not admin_email or not admin_password:
+        raise HTTPException(
+            status_code=500,
+            detail="Admin credentials are not configured"
+        )
+    existing_admin = (
 
-    approved_organizers=(db.query(models.User).filter(models.User.role == "organizer",models.User.organizer_status=="approved").count())
+        db.query(models.User)
 
-    rejected_organizers=(db.query(models.User).filter(models.User.role == "organizer",models.User.organizer_status=="rejected").count())
-   
-    pending_organizers = (db.query(models.User).filter(models.User.role == "organizer",models.User.organizer_status == "pending").count())
+        .filter(models.User.email == admin_email)
 
-    # events
-    total_events=(db.query(models.Event).count())
+        .first()
 
-    active_events=(db.query(models.Event).filter(models.Event.is_active=="True").count())
+    ) 
+    if existing_admin:
 
-    inactive_events=(db.query(models.Event).filter(models.Event.is_active=="False").count())
+        raise HTTPException(
 
+            status_code=409,
 
+            detail="Admin account already exists"
+
+        )
+    hashed_password = password_hash.hash(admin_password)
+
+    new_admin = models.User(
+
+        name=admin_name,
+
+        email=admin_email,
+
+        hashed_password=hashed_password,
+
+        role="admin",
+
+        organizer_status="not_applicable"
+
+    )
+
+    db.add(new_admin)
+
+    try:
+
+        db.commit()
+
+        db.refresh(new_admin)
+
+    except Exception:
+
+        db.rollback()
+
+        raise HTTPException(
+
+            status_code=500,
+
+            detail="Admin creation failed"
+
+        )
 
     return {
 
+        "message": "Admin created successfully",
+
+        "admin_id": new_admin.id,
+
+        "name": new_admin.name,
+
+        "email": new_admin.email,
+
+        "role": new_admin.role
+
+    }
+
+# =========================================================
+# ADMIN: DASHBOARD STATISTICS
+# =========================================================
+
+@app.get("/admin/dashboard")
+def get_admin_dashboard(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(check_admin_role)
+):
+
+    # Count total users
+    total_users = db.query(models.User).count()
+
+    # Count attendees
+    total_attendees = (
+        db.query(models.User)
+        .filter(models.User.role == "attendee")
+        .count()
+    )
+
+    # Count total organizers
+    total_organizers = (
+        db.query(models.User)
+        .filter(models.User.role == "organizer")
+        .count()
+    )
+
+    # Count pending organizers
+    pending_organizers = (
+        db.query(models.User)
+        .filter(
+            models.User.role == "organizer",
+            models.User.organizer_status == "pending"
+        )
+        .count()
+    )
+
+    # Count approved organizers
+    approved_organizers = (
+        db.query(models.User)
+        .filter(
+            models.User.role == "organizer",
+            models.User.organizer_status == "approved"
+        )
+        .count()
+    )
+
+    # Count rejected organizers
+    rejected_organizers = (
+        db.query(models.User)
+        .filter(
+            models.User.role == "organizer",
+            models.User.organizer_status == "rejected"
+        )
+        .count()
+    )
+
+    # Count total events
+    total_events = db.query(models.Event).count()
+
+    # Count active events
+    active_events = (
+        db.query(models.Event)
+        .filter(models.Event.is_active == True)
+        .count()
+    )
+
+    # Count inactive events
+    inactive_events = (
+        db.query(models.Event)
+        .filter(models.Event.is_active == False)
+        .count()
+    )
+
+    return {
         "message": "Admin dashboard statistics",
         "total_users": total_users,
         "total_attendees": total_attendees,
@@ -816,3 +948,103 @@ def get_admin_dashboard(
             "inactive": inactive_events
         }
     }
+
+
+@app.patch("/admin/users/{user_id}/status")
+def updating_user(
+    user_id:int,
+    is_active:bool,
+    db:Session=Depends(get_db),
+    current_user:models.User=Depends(check_admin_role)
+    ):
+
+    user=(db.query(models.User)
+    .filter(models.User.id==user_id)
+    .first())
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="user not found"
+        )
+    
+    if user.role=="admin":
+        raise HTTPException(
+            status_code=403,
+            detail="bad request , you can not modify this user"
+        )
+    
+    user.is_active=is_active
+
+    db.commit()
+    db.refresh(user)
+
+    return{
+        "message":"user updated succesfully ",
+        "user_id":user.id,
+        "is_active":user.is_active
+    }
+
+
+@app.get("/admin/users")
+def getting_all_users(db:Session=Depends(get_db),current_user:models.User=Depends(check_admin_role)):
+    
+    users=(db.query(models.User).order_by(models.User.id.asc()).all())
+
+    users_list=[]
+    for user in users:
+        user_details={
+            "user_id": user.id,
+
+            "name": user.name,
+
+            "email": user.email,
+
+            "role": user.role,
+
+            "organizer_status": user.organizer_status
+
+        }
+        users_list.append(user_details)
+    return{
+        "total_users": len(users_list),
+        "users": users_list
+    }
+        
+@app.get("/admin/events")
+def getting_all_events(db:Session=Depends(get_db),current_user:models.User=Depends(check_admin_role)):
+    events=(db.query(models.Event).order_by(models.Event.id.desc()).all())
+
+    events_list=[]
+    for event in events:
+        event_details={
+            "event_id": event.id,
+
+            "title": event.title,
+
+            "location": event.location,
+
+            "event_date": event.event_date,
+
+            "price": event.price,
+
+            "total_seats": event.total_seats,
+
+            "available_seats": event.available_seats,
+
+            "organizer_id": event.organizer_id,
+
+            "is_active": event.is_active
+        } 
+        events_list.append(event_details)
+
+    return {
+
+        "total_events": len(events),
+
+        "events": events_list
+
+    }
+
+
+    
