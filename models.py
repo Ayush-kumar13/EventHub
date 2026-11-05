@@ -1,12 +1,11 @@
-from sqlalchemy import  Boolean,Column, Integer, String,DateTime,ForeignKey,Text
+from sqlalchemy import  Boolean,Column, Integer, String,DateTime,ForeignKey,Text,Float
 from sqlalchemy.sql import func
 from database import Base
-
+from datetime import datetime
 
 class User(Base):
     __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
+    id=Column(Integer,primary_key=True,index=True)
 
     name = Column(String(100), nullable=False)
 
@@ -50,3 +49,34 @@ class Event(Base):
         nullable=False
     )
     
+
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
+    )
+
+    event_id = Column(
+        Integer,
+        ForeignKey("events.id"),
+        nullable=False
+    )
+    quantity = Column(Integer, nullable=False)
+
+    total_price = Column(Float, nullable=False)
+
+    status = Column(
+        String,
+        default="confirmed",
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

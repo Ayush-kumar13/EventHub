@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from pwdlib import PasswordHash
 from database import Base, engine, get_db
 import models
-from schemas import UserLogin, UserCreate, EventCreate ,EventUpdate
+from schemas import UserLogin, UserCreate, EventCreate ,EventUpdate ,BookingCreate,BookingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
@@ -1046,5 +1046,76 @@ def getting_all_events(db:Session=Depends(get_db),current_user:models.User=Depen
 
     }
 
+@app.post("/admin/events/{event_id}/bookings")
+def create_booking(event_id:int,booking:BookingCreate,db:Session=Depends(get_db),current_user:models.User=Depends(get_current_user)):
 
+    if current_user.role!="attandee":
+        raise HTTPException(
+            status_code=403,
+            detail="BAD_REQUEST , Only attandee can book "
+        )
     
+    event=(
+        db.query(models.Event).filter(models.Event.id==event_id).first()
+    )
+    if not event:
+        raise HTTPException(
+            status_code=404,
+            detail="event not found"
+        )
+    
+    if not event.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="This event is not available"
+        )
+    if booking.quantity>event.available_seats:
+        raise HTTPException(
+            status=400,
+            detail="not enough seatsa available "
+        )
+    total_price=event.price*booking.quantity
+
+    new_booking=models.Booking(
+        user_id=current_user.id,
+        event_id=event.id,
+        quantity=booking.quantity,
+        total_price=total_price,
+        status="confirmed"
+
+    )
+    event.available_seats=event.avilable_seats-booking.quantity
+
+    try:
+        db.add(new_booking)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+
+            detail="Booking could not be completed"
+        ) 
+    return{
+                "message": "Booking created successfully",
+
+        "booking": {
+
+            "id": new_booking.id,
+
+            "user_id": new_booking.user_id,
+
+            "event_id": new_booking.event_id,
+
+            "quantity": new_booking.quantity,
+
+            "total_price": new_booking.total_price,
+
+            "status": new_booking.status,
+
+            "created_at": new_booking.created_at
+
+        }
+    }
+
+

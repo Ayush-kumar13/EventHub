@@ -1,6 +1,6 @@
 from pydantic import BaseModel , EmailStr ,Field
 from datetime import datetime
-from typing import Literal , Optional
+from typing import Literal, Optional
 
 class UserCreate(BaseModel):
     name:str=Field(min_length=2,max_length=100)
@@ -48,7 +48,6 @@ class EventUpdate(BaseModel):
 
 
 class BookingCreate(BaseModel):
-    event_id:int
     quantity:int=Field(gt=0)
 
 class BookingResponse(BaseModel):
@@ -62,6 +61,4 @@ class BookingResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
 
