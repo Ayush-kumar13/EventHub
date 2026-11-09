@@ -62,3 +62,12 @@ class BookingResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class BookingConfirmation(BaseModel):
+    message:str
+    booking_id:int
+    event_id:int
+    event_title:str
+    quantity:int
+    total_price:float
+    booking_status:str
+    created_at:datetime

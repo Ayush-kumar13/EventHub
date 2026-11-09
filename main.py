@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from pwdlib import PasswordHash
 from database import Base, engine, get_db
 import models
-from schemas import UserLogin, UserCreate, EventCreate ,EventUpdate ,BookingCreate,BookingResponse
+from schemas import UserLogin, UserCreate, EventCreate ,EventUpdate ,BookingCreate,BookingResponse,BookingConfirmation
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
@@ -1048,13 +1048,11 @@ def getting_all_events(db:Session=Depends(get_db),current_user:models.User=Depen
 
 @app.post("/admin/events/{event_id}/bookings")
 def create_booking(event_id:int,booking:BookingCreate,db:Session=Depends(get_db),current_user:models.User=Depends(get_current_user)):
-
     if current_user.role!="attandee":
         raise HTTPException(
             status_code=403,
             detail="BAD_REQUEST , Only attandee can book "
-        )
-    
+        )    
     event=(
         db.query(models.Event).filter(models.Event.id==event_id).first()
     )
@@ -1062,30 +1060,36 @@ def create_booking(event_id:int,booking:BookingCreate,db:Session=Depends(get_db)
         raise HTTPException(
             status_code=404,
             detail="event not found"
-        )
-    
+        )    
     if not event.is_active:
         raise HTTPException(
             status_code=400,
             detail="This event is not available"
         )
-    if booking.quantity>event.available_seats:
+    if event.avaiable_seats <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="no seats available"
+        )    
+    if booking.quantity > event.available_seats:
         raise HTTPException(
             status=400,
-            detail="not enough seatsa available "
+            detail=f"only{event.available_seats}seats are available"
+        )
+    existing_booking=(db.query(models.Booking).filter(
+        models.Booking.user_id==current_user,
+        models.Booking.event_id==event_id,
+        models.Booking.status=="confirmed").first()
         )
     total_price=event.price*booking.quantity
-
     new_booking=models.Booking(
         user_id=current_user.id,
         event_id=event.id,
         quantity=booking.quantity,
         total_price=total_price,
         status="confirmed"
-
     )
     event.available_seats=event.avilable_seats-booking.quantity
-
     try:
         db.add(new_booking)
         db.commit()
@@ -1093,29 +1097,134 @@ def create_booking(event_id:int,booking:BookingCreate,db:Session=Depends(get_db)
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-
             detail="Booking could not be completed"
         ) 
+    return BookingConfirmation(
+        message="Your booking has been confirmed successfully",
+        booking_id=new_booking.id,
+        event_id=event.id,
+        event_title=event.title,
+        quantity=new_booking.quantity,
+        total_price=new_booking.total_price,
+        booking_status=new_booking.status,
+        created_at=new_booking.created_at
+    )
+
+@app.get("/my-bookings")
+def get_my_bookings(db:Session=Depends(get_db),current_user:models.User=Depends(get_current_user)):
+    
+    user_bookings=(db.query(models.Booking).filter(models.Booking.user_id==current_user.id).order_by(models.Booking.created_at.desc()).all())
+
+    booking_list=[]
+    for booking in user_bookings:
+        event=(db.query(models.Event).filter(models.Event.id==booking.event_id).first())
+
+
+        bookings_details={
+            "booking_id": booking.id,
+            "event_id": booking.event_id,
+            "event_title": event.title if event else None,
+            "event_location": event.location if event else None,
+            "event_date": event.event_date if event else None,
+            "quantity": booking.quantity,
+            "total_price": booking.total_price,
+            "booking_status": booking.status,
+            "created_at": booking.created_at
+    }    
+        booking_list.append(bookings_details)
+        return {
+        "user_id": current_user.id,
+        "user_name": current_user.name,
+        "total_bookings": len(user_bookings),
+        "bookings": booking_list
+
+    }               
+                    
+@app.get("/bookings/{booking_id}")
+def get_booking_details(booking_id:int,db:Session=Depends(get_db),current_user:models.User=Depends(get_current_user)):
+
+    booking=(db.query(models.Booking).filter(models.Booking.id==booking_id).first())
+
+    if booking is None:
+        raise HTTPException(
+            status_code=404,
+            detail="booking not found"
+        )
+    if current_user.id !=booking.user_id:
+        raise HTTPException(
+            status_code=400,
+            detail="bad request you are not allowed to view this booking "
+        )
+    
+    event=(db.query(models.Event).filter(models.Event.id==booking.event_id).first())
+
     return{
-                "message": "Booking created successfully",
-
-        "booking": {
-
-            "id": new_booking.id,
-
-            "user_id": new_booking.user_id,
-
-            "event_id": new_booking.event_id,
-
-            "quantity": new_booking.quantity,
-
-            "total_price": new_booking.total_price,
-
-            "status": new_booking.status,
-
-            "created_at": new_booking.created_at
-
-        }
+        "message":"event succesfully fetched ",
+        "booking_id":booking.id,
+        "user_id":booking.user_id,
+        "event":{
+        "event_id":event.id if event else None,
+        "event_title":event.title if event else None,
+        "event_date": event.event_date if event else None
+        },
+        "quantity":booking.quantity,
+        "total_price":booking.total_price,
+        "created_at":booking.created_at
     }
 
+@app.patch("/bookings/{booking_id}/cancel")
+def cancel_booking(
+    booking_id:int,
+    db:Session=Depends(get_db),
+    curret_user:models.User=Depends(get_current_user)):
+
+    booking=(db.query(models.Booking).filter(models.Booking.id==booking_id).first())
+
+    if booking is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found "
+        )
+    
+    if booking.user_id!=curret_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden ' you cannot cancel others booking ' "
+        )
+    if booking.status!="confirmed":
+        raise HTTPException(
+            status_code=400,
+            detail="BAD REQUEST 'this booking is already cancelled ' "
+        )
+    booking.status="cancelled"
+
+    try:
+        db.commit()
+        db.refresh(booking)
+    except Exception:
+        db.rollback()
+    raise HTTPException(
+        status_code=500,
+        detail="Booking cancellation failed"
+
+    )        
+
+
+    return {
+
+        "message": "Booking cancelled successfully",
+
+        "booking_id": booking.id,
+
+        "booking_status": booking.status
+
+    }
+
+
+
+
+
+
+
+    
 
