@@ -1,0 +1,18 @@
+ "user_id": 1,
+  "name": "ayush_attendee_1",
+  "email": "ayush_attandee_1@example.com",
+  "role": "attendee"
+         ({
+      "title": "ayush_organizer_2",
+      " description": "FastAPI & PostgreSQL Masterclass - Building Scalable REST APIs.",
+      "location": "Bharat City, Teela Mod, Loni, Ghaziabad",
+      "event_date": "2026-11-20T15:30:00.000Z",
+      "price": 999.0,
+      "total_seats": 100
+})
+
+  "user_id": 2,
+  "name": "ayush_organizer_1",
+  "email": "ayush_organizer_1@example.com",
+  "role": "organizer",
+  "organizer_status": "pending
