@@ -1,5 +1,14 @@
+<<<<<<< HEAD
 .DS_Store
 node_modules/
 __pycache__/
 .env
 venv/
+=======
+.env
+*.db
+__pycache__/
+venv/
+.DS_Store
+>>>>>>> b3e5559a74156ea00c077c9d3f8101f7b840d284
+myenv/

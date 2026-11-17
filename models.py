@@ -1,0 +1,82 @@
+from sqlalchemy import  Boolean,Column, Integer, String,DateTime,ForeignKey,Text,Float
+from sqlalchemy.sql import func
+from database import Base
+from datetime import datetime
+
+class User(Base):
+    __tablename__ = "users"
+    id=Column(Integer,primary_key=True,index=True)
+
+    name = Column(String(100), nullable=False)
+
+    email = Column(String(150), nullable=False, unique=True, index=True)
+
+    hashed_password = Column(String(250), nullable=False)
+
+    role=Column(String,default="attendee",nullable=False)
+
+    organizer_status=Column(String,default="not_applicable",nullable=False)
+    
+    is_active = Column(Boolean, default=True)
+
+
+class Event(Base):
+    __tablename__="events"
+
+    id=Column(Integer,primary_key=True,index=True)
+
+    title=Column(String(150),nullable=False)
+
+    description=Column(Text,nullable=False)
+
+    location=Column(String(200),nullable=False)
+
+    event_date=Column(DateTime(timezone=True),nullable=False)
+
+    price=Column(Integer,nullable=False,default=0)
+
+    total_seats=Column(Integer,nullable=False)
+
+    available_seats=Column(Integer,nullable=False)
+
+    organizer_id=Column(Integer,ForeignKey("users.id"),nullable=False)
+
+    is_active=Column(Boolean,default=True,nullable=False)
+
+    created_at=Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False
+    )
+    
+
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
+    )
+
+    event_id = Column(
+        Integer,
+        ForeignKey("events.id"),
+        nullable=False
+    )
+    quantity = Column(Integer, nullable=False)
+
+    total_price = Column(Float, nullable=False)
+
+    status = Column(
+        String,
+        default="confirmed",
+        nullable=False
+    )
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
