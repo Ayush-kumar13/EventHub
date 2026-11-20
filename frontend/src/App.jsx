@@ -7,6 +7,8 @@ import Register from "./pages/Register";
 import { AuthProvider } from "./context/AuthContext";
 import EventDetails from "./pages/EventDetails";
 import Events from "./pages/Events";
+import ProtectedRoute from "./components/ProtectedRoute";
+import MyBookings from "./pages/MyBookings";
 const App = () => {
   return (
     <AuthProvider>
@@ -19,6 +21,9 @@ const App = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/events" element={<Events />} />
           <Route path="/events/:event_id" element={<EventDetails />} />
+          <Route path="/my-bookings" element={<ProtectedRoute>
+            <MyBookings/>
+          </ProtectedRoute>}/>
         </Routes>
       </BrowserRouter>
     </AuthProvider>
