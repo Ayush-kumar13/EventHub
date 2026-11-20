@@ -10,10 +10,10 @@ export const AuthProvider=({children})=>{
         localStorage.getItem("token")
 
     )
-    const login=(userData,access_Token)=>{
-        localStorage.setItem("token",access_Token)
+    const login=(userData,access_token)=>{
+        localStorage.setItem("token",access_token)
 
-        setToken(access_Token)
+        setToken(access_token)
         setUser(userData)
 
     }

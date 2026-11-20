@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 
 const EventCard = (props) => {
   return (
@@ -8,7 +9,9 @@ const EventCard = (props) => {
         <p>{props.description}</p>
         <p>Location:{props.location}</p>
         <p>Price:{props.price}</p>
-        <button>View Details</button>
+        <Link to ={`/events/${props.event_id}`}>
+        View Details 
+        </Link>
         <hr/>
       
     </div>
