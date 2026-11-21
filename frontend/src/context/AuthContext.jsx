@@ -1,4 +1,5 @@
 import React,{createContext, useContext, useEffect, useState} from "react";
+import api from "../services/api";
 const AuthContext=createContext()
 
 export const AuthProvider=({children})=>{
@@ -24,9 +25,39 @@ export const AuthProvider=({children})=>{
         setToken(null)
         setUser(null)
     }
-    useEffect(()=>{})
+    useEffect(()=>
+        {
+            const checkUser=async()=>{
+
+            if(!token){
+            setLoading(false);
+            return
+        }
+        try{
+            const response= await api.get('/me',{headers:{
+                Authorization:`Bearer ${token}`
+            }})
+            setUser(response.data)
+
+            } 
+         catch(error){
+            console.log("Authentication failed",error.response?.data)
+
+            localStorage.removeItem("token")
+            setToken(null);
+            setUser(null);
+        }
+        finally{
+            setLoading(false);
+        }
+
+
+
+    };
+    checkUser();
+    },[])
     return(
-        <AuthContext.Provider value={{user,token,login,logout,setUser}}>
+        <AuthContext.Provider value={{user,token,login,logout,setUser,loading}}>
         {children}
         </AuthContext.Provider>
     )

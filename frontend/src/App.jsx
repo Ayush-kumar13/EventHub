@@ -9,6 +9,9 @@ import EventDetails from "./pages/EventDetails";
 import Events from "./pages/Events";
 import ProtectedRoute from "./components/ProtectedRoute";
 import MyBookings from "./pages/MyBookings";
+import RoleRoute from "./components/RoleRoute";
+import OrganizerDashboard from "./pages/OrganizerDashboard"
+import AdminDashboard from './pages/AdminDashboard'
 const App = () => {
   return (
     <AuthProvider>
@@ -23,7 +26,23 @@ const App = () => {
           <Route path="/events/:event_id" element={<EventDetails />} />
           <Route path="/my-bookings" element={<ProtectedRoute>
             <MyBookings/>
-          </ProtectedRoute>}/>
+          </ProtectedRoute>}
+          />
+
+
+          <Route path="/organizer" element={
+            <RoleRoute allowedRoles={["organizer"]}>
+              <OrganizerDashboard/>
+            </RoleRoute>}
+            />
+
+            <Route path="/admin" element={
+              <RoleRoute allowedRoles={["admin"]}>
+                <AdminDashboard/>
+              </RoleRoute>}/>
+            
+            
+          
         </Routes>
       </BrowserRouter>
     </AuthProvider>
