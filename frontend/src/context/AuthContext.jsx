@@ -1,4 +1,4 @@
-import React,{createContext, useContext, useState} from "react";
+import React,{createContext, useContext, useEffect, useState} from "react";
 const AuthContext=createContext()
 
 export const AuthProvider=({children})=>{
@@ -10,6 +10,8 @@ export const AuthProvider=({children})=>{
         localStorage.getItem("token")
 
     )
+    const [loading, setLoading] = useState(true);
+
     const login=(userData,access_token)=>{
         localStorage.setItem("token",access_token)
 
@@ -22,6 +24,7 @@ export const AuthProvider=({children})=>{
         setToken(null)
         setUser(null)
     }
+    useEffect(()=>{})
     return(
         <AuthContext.Provider value={{user,token,login,logout,setUser}}>
         {children}
